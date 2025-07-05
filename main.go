@@ -3,13 +3,13 @@ package main
 import (
 	"time"
 
-	"github.com/bootdotdev/pokedexcli/internal/pokeapi"
+	"github.com/bdgeraghty/pokedexcli/internal/pokeapi"
 )
 
 func main() {
 	pokeClient := pokeapi.NewClient(
 		time.Second*10, // HTTP timeout
-		time.Minute*5,   // Cache TTL
+		time.Minute*5,  // Cache TTL
 	)
 	cfg := &config{
 		pokeapiClient: pokeClient,

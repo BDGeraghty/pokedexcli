@@ -1,12 +1,13 @@
-package pokecache
+package main
 
 import (
 	"fmt"
+	"net/http"
 	"sync"
 	"time"
 )
 
-type cacheEntry struct { 
+type cacheEntry struct {
 	val       []byte
 	createdAt time.Time
 }
@@ -21,16 +22,16 @@ func NewCache(ttl time.Duration) *Cache {
 	c := &Cache{
 		entries: make(map[string]cacheEntry),
 		ttl:     ttl,
-	}	
+	}
 	go c.reapLoop()
 	return c
 }
 
 func NewClient(timeout time.Duration, cacheTTL time.Duration) Client {
-    return Client{
-        httpClient: http.Client{Timeout: timeout},
-        cache:      pokecache.NewCache(cacheTTL),
-    }
+	return Client{
+		httpClient: http.Client{Timeout: timeout},
+		cache:      pokecacheNewCache(cacheTTL),
+	}
 }
 
 func (c *Cache) Add(key string, val []byte) {
