@@ -1,73 +1,64 @@
-package main
+package pokecache
 
 import (
-	"fmt"
-	"net/http"
 	"sync"
 	"time"
 )
 
-type cacheEntry struct {
-	val       []byte
-	createdAt time.Time
-}
-
+// Cache -
 type Cache struct {
-	entries map[string]cacheEntry
-	ttl     time.Duration
-	mu      sync.Mutex
+	cache map[string]cacheEntry
+	mux   *sync.Mutex
 }
 
-func NewCache(ttl time.Duration) *Cache {
-	c := &Cache{
-		entries: make(map[string]cacheEntry),
-		ttl:     ttl,
+type cacheEntry struct {
+	createdAt time.Time
+	val       []byte
+}
+
+// NewCache -
+func NewCache(interval time.Duration) Cache {
+	c := Cache{
+		cache: make(map[string]cacheEntry),
+		mux:   &sync.Mutex{},
 	}
-	go c.reapLoop()
+
+	go c.reapLoop(interval)
+
 	return c
 }
 
-func NewClient(timeout time.Duration, cacheTTL time.Duration) Client {
-	return Client{
-		httpClient: http.Client{Timeout: timeout},
-		cache:      pokecacheNewCache(cacheTTL),
+// Add -
+func (c *Cache) Add(key string, value []byte) {
+	c.mux.Lock()
+	defer c.mux.Unlock()
+	c.cache[key] = cacheEntry{
+		createdAt: time.Now().UTC(),
+		val:       value,
 	}
 }
 
-func (c *Cache) Add(key string, val []byte) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.entries[key] = cacheEntry{
-		val:       val,
-		createdAt: time.Now(),
-	}
+// Get -
+func (c *Cache) Get(key string) ([]byte, bool) {
+	c.mux.Lock()
+	defer c.mux.Unlock()
+	val, ok := c.cache[key]
+	return val.val, ok
 }
 
-func (c *Cache) Get(key string) ([]byte, error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	entry, exists := c.entries[key]
-	if !exists {
-		return nil, fmt.Errorf("cache entry for %s not found", key)
-	}
-	if time.Since(entry.createdAt) > c.ttl {
-		delete(c.entries, key)
-		return nil, fmt.Errorf("cache entry for %s has expired", key)
-	}
-	return entry.val, nil
-}
-
-func (c *Cache) reapLoop() {
-	ticker := time.NewTicker(c.ttl)
-	defer ticker.Stop()
+func (c *Cache) reapLoop(interval time.Duration) {
+	ticker := time.NewTicker(interval)
 	for range ticker.C {
-		now := time.Now()
-		c.mu.Lock()
-		for key, entry := range c.entries {
-			if now.Sub(entry.createdAt) > c.ttl {
-				delete(c.entries, key)
-			}
+		c.reap(time.Now().UTC(), interval)
+	}
+}
+
+func (c *Cache) reap(now time.Time, last time.Duration) {
+	c.mux.Lock()
+	defer c.mux.Unlock()
+	for k, v := range c.cache {
+		if v.createdAt.Before(now.Add(-last)) {
+			delete(c.cache, k)
 		}
-		c.mu.Unlock()
 	}
 }
